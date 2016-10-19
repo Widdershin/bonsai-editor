@@ -1,3 +1,13 @@
-.hello-world {
-  color: rebeccapurple;
+html, body {
+  background: #222522;
+  color: #EFE;
+  margin: 0;
+}
+
+svg {
+  border: 1px solid red;
+}
+
+pre {
+  background: #333533;
 }
