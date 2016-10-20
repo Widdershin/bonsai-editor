@@ -12,13 +12,16 @@ function App (sources) {
   const {DOM} = sources;
 
   const initialState = {
-    zoom: 1
+    zoom: 1,
+    pan: {
+      x: 0,
+      y: 0
+    }
   };
 
   const mouseWheel$ = DOM
     .select('document')
     .events('mousewheel');
-
 
   const zoomOut$ = mouseWheel$
     .filter(ev => ev.wheelDelta < 0)
@@ -34,15 +37,44 @@ function App (sources) {
       zoom: state.zoom - 0.03
     }));
 
+  const svgMousedown$ = DOM
+    .select('svg')
+    .events('mousedown');
+
+  const svgMouseup$ = DOM
+    .select('svg')
+    .events('mouseup');
+
   const mousePosition$ = DOM
     .select('document')
     .events('mousemove')
     .map(mousePositionFromEvent)
-    .startWith({});
+    .startWith({x: 0, y: 0});
+
+  const mousePositionChange$ = mousePosition$
+    .fold(({lastPosition}, position) => ({
+      lastPosition: position,
+      delta: {
+        x: position.x - lastPosition.x,
+        y: position.y - lastPosition.y
+      }
+    }), {lastPosition: {x: 0, y: 0}})
+    .drop(1)
+    .map(({delta}) => delta);
+
+  const panning$ = xs.merge(
+    svgMousedown$.mapTo(true),
+    svgMouseup$.mapTo(false)
+  ).startWith(false);
+
+  const pan$ = panning$
+    .map(panning => mousePositionChange$.filter(() => panning))
+    .flatten();
 
   const reducer$ = xs.merge(
     zoomOut$,
-    zoomIn$
+    zoomIn$,
+    pan$.map(pan => state => ({...state, pan: subtract(state.pan, multiply(pan, state.zoom))}))
   );
 
   const state$ = reducer$.fold((state, reducer) => reducer(state), initialState);
@@ -52,19 +84,47 @@ function App (sources) {
   };
 }
 
-function translateZoom (zoom, width, height) {
+function translateZoom (zoom, pan, width, height) {
   return {
-    x: -(zoom - 1) * width / 2,
-    y: -(zoom - 1) * height / 2,
+    x: -(zoom - 1) * width / 2 + pan.x,
+    y: -(zoom - 1) * height / 2 + pan.y,
     width: width * zoom,
     height: height * zoom
   }
 }
 
+function add (a, b) {
+  return {
+    x: a.x + b.x,
+    y: a.y + b.y
+  }
+}
+
+function subtract (a, b) {
+  return {
+    x: a.x - b.x,
+    y: a.y - b.y
+  }
+}
+
+function multiply (a, n) {
+  if (typeof n === 'object') {
+    return {
+      x: a.x * n.x,
+      y: a.y * n.y
+    };
+  }
+
+  return {
+    x: a.x * n,
+    y: a.y * n
+  };
+}
+
 function view (state) {
   const width = document.documentElement.clientWidth - 20;
   const height = document.documentElement.clientHeight - 30;
-  const zoomedDimensions = translateZoom(state.zoom, width, height);
+  const zoomedDimensions = translateZoom(state.zoom, state.pan, width, height);
   return (
     div('.hello-world', [
       svg({
