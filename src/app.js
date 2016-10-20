@@ -1,4 +1,4 @@
-import {div, pre, svg, h, button} from '@cycle/dom';
+import {div, pre, svg, h, button, body} from '@cycle/dom';
 import xs from 'xstream';
 
 function mousePositionFromEvent (event) {
@@ -125,6 +125,8 @@ function view (state) {
   const width = document.documentElement.clientWidth - 20;
   const height = document.documentElement.clientHeight - 30;
   const zoomedDimensions = translateZoom(state.zoom, state.pan, width, height);
+  const blockWidth = width / 2;
+
   return (
     div('.hello-world', [
       svg({
@@ -134,16 +136,32 @@ function view (state) {
           viewBox: `${zoomedDimensions.x} ${zoomedDimensions.y} ${zoomedDimensions.width} ${zoomedDimensions.height}`
         }
       }, [
-        h('rect', {attrs: {x: 20, y: 20, width: width - 40, height: height - 40, stroke: 'skyblue', fill: '#222322'}}),
-        h('text', {attrs: {x: 40, y: 55, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
-        h('line', {attrs: {x1: width / 2 - 70, y1: 40, x2: 400, y2: height - 50, stroke: 'lightgreen', strokeWidth: 2}}),
-        renderCodeBlock('DOM', {x: width / 2 - 70, y: 50}),
-        renderCodeBlock(JSON.stringify(state, null, 2), {x: 150, y: 200}),
-        renderCodeBlock('xs.of(div("hello world"))', {x: 400, y: 400}),
-        renderCodeBlock('DOM', {x: width / 2 - 70, y: height - 60})
+        h('g', [
+          h('foreignObject', {class: 'preview', attrs: {x: blockWidth + 30, y: 20, width: blockWidth, height: blockWidth - 50}}, [
+            body('.preview', [
+              div('hello world')
+            ])
+          ])
+        ]),
+
+        renderBlock(state, {x: 0, y: 0, width: blockWidth, height: blockWidth})
       ])
     ])
   )
+}
+
+function renderBlock (state, {x, y, width, height}) {
+  return (
+    h('g', [
+      h('rect', {attrs: {x: 20, y: 20, width: width - 40, height: height - 40, stroke: 'skyblue', fill: '#222322'}}),
+      h('text', {attrs: {x: 40, y: 55, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
+      h('line', {attrs: {x1: width / 2 - 70, y1: 40, x2: 400, y2: height - 50, stroke: 'lightgreen', strokeWidth: 2}}),
+      renderCodeBlock('DOM', {x: width / 2 - 70, y: 50}),
+      renderCodeBlock(JSON.stringify(state, null, 2), {x: 150, y: 200}),
+      renderCodeBlock('xs.of(div("hello world"))', {x: 400, y: 400}),
+      renderCodeBlock('DOM', {x: width / 2 - 70, y: height - 60})
+    ])
+  );
 }
 
 function renderCodeBlock (code, {x, y}) {
