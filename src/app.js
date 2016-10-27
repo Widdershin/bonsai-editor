@@ -34,19 +34,12 @@ function App (sources) {
   const initialState = {
     zoom: 1,
 
-    pan: Vector({
-      x: 0,
-      y: 0
-    }),
-
-    codeBlockPosition: Vector({
-      x: 0,
-      y: 0
-    }),
+    pan: Vector.zero,
+    codeBlockPosition: Vector.zero,
 
     nodes: {
       A: {type: 'input', name: 'DOM', position: Vector({x: 400, y: 50})},
-      B: {type: 'code', text: 'xs.of("hello world")', position: Vector({x: 400, y: 400})},
+      B: {type: 'code', text: 'xs.of("nello world")', position: Vector({x: 400, y: 400})},
       C: {type: 'output', name: 'DOM', position: Vector({x: 400, y: 900})}
     },
 
@@ -99,13 +92,13 @@ function App (sources) {
     .select('document')
     .events('mousemove')
     .map(mousePositionFromEvent)
-    .startWith(Vector({x: 0, y: 0}));
+    .startWith(Vector.zero);
 
   const mousePositionChange$ = mousePosition$
     .fold(({lastPosition}, position) => ({
       lastPosition: position,
       delta: position.minus(lastPosition)
-    }), {lastPosition: Vector({x: 0, y: 0})})
+    }), {lastPosition: Vector.zero})
     .drop(1)
     .map(({delta}) => delta);
 
