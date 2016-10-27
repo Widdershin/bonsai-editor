@@ -12,18 +12,30 @@ function mousePositionFromEvent (event) {
 
 function panReducer (pan) {
   return function _panReducer (state) {
+    const scaledPan = pan.times(state.zoom);
+
     if (state.selectedCodeBlock) {
+      const selectedNode = state.nodes[state.selectedCodeBlock];
+
       return {
         ...state,
 
-        codeBlockPosition: state.codeBlockPosition.add(pan)
+        nodes: {
+          ...state.nodes,
+
+          [state.selectedCodeBlock]: {
+            ...selectedNode,
+
+            position: selectedNode.position.plus(scaledPan)
+          }
+        }
       };
     }
 
     return {
       ...state,
 
-      pan: state.pan.minus(pan.times(state.zoom))
+      pan: state.pan.minus(scaledPan)
     };
   };
 }
@@ -38,9 +50,9 @@ function App (sources) {
     codeBlockPosition: Vector.zero,
 
     nodes: {
-      A: {type: 'input', name: 'DOM', position: Vector({x: 400, y: 50})},
-      B: {type: 'code', text: 'xs.of("nello world")', position: Vector({x: 400, y: 400})},
-      C: {type: 'output', name: 'DOM', position: Vector({x: 400, y: 900})}
+      A: {id: 'A', type: 'input', name: 'DOM', position: Vector({x: 400, y: 50})},
+      B: {id: 'B', type: 'code', text: 'xs.of("nello world")', position: Vector({x: 400, y: 400})},
+      C: {id: 'C', type: 'output', name: 'DOM', position: Vector({x: 400, y: 900})}
     },
 
     edges: [
@@ -48,7 +60,7 @@ function App (sources) {
       {from: 'B', to: 'C'}
     ],
 
-    selectedCodeBlock: false
+    selectedCodeBlock: null
   };
 
   const mouseWheel$ = DOM
@@ -74,7 +86,7 @@ function App (sources) {
     .events('mousedown');
 
   const selectCodeBlock$ = codeBlockMousedown$
-    .map(ev => (state) => ({...state, selectedCodeBlock: true}));
+    .map(ev => (state) => ({...state, selectedCodeBlock: ev.ownerTarget.dataset.id}));
 
   const svgMousedown$ = DOM
     .select('svg')
@@ -117,7 +129,7 @@ function App (sources) {
     pan$.map(panReducer),
 
     selectCodeBlock$,
-    mouseup$.mapTo(state => ({...state, selectedCodeBlock: false}))
+    mouseup$.mapTo(state => ({...state, selectedCodeBlock: null}))
   );
 
   const state$ = reducer$.fold((state, reducer) => reducer(state), initialState);
@@ -188,7 +200,7 @@ function renderNode (node) {
   }
 
   if (node.type === 'code') {
-    return renderCodeBlock(node.text, node.position);
+    return renderCodeBlock(node.text, node.position, node.id);
   }
 }
 
@@ -213,7 +225,7 @@ function renderEdge (edge, state) {
   );
 }
 
-function renderCodeBlock (code, {x, y}) {
+function renderCodeBlock (code, {x, y}, id) {
   const lines = code.split('\n');
   const LINE_HEIGHT = 23;
   const CHARACTER_WIDTH = 11.6;
@@ -241,7 +253,7 @@ function renderCodeBlock (code, {x, y}) {
       }),
 
       h('foreignObject', {attrs: {x: x + 5, y: y + 6}}, [
-        div('.code-wrapper', [
+        div('.code-wrapper', {attrs: {'data-id': id}}, [
           pre(code)
         ])
       ])
