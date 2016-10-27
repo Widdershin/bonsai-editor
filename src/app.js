@@ -1,12 +1,13 @@
 import {div, pre, svg, h, button, body} from '@cycle/dom';
 import xs from 'xstream';
 import _ from 'lodash';
+import Vector from './vector';
 
 function mousePositionFromEvent (event) {
-  return {
+  return Vector({
     x: event.clientX,
     y: event.clientY
-  };
+  });
 }
 
 function panReducer (pan) {
@@ -15,14 +16,14 @@ function panReducer (pan) {
       return {
         ...state,
 
-        codeBlockPosition: add(pan, state.codeBlockPosition)
+        codeBlockPosition: state.codeBlockPosition.add(pan)
       };
     }
 
     return {
       ...state,
 
-      pan: subtract(state.pan, multiply(pan, state.zoom))
+      pan: state.pan.minus(pan.times(state.zoom))
     };
   };
 }
@@ -32,20 +33,21 @@ function App (sources) {
 
   const initialState = {
     zoom: 1,
-    pan: {
-      x: 0,
-      y: 0
-    },
 
-    codeBlockPosition: {
+    pan: Vector({
       x: 0,
       y: 0
-    },
+    }),
+
+    codeBlockPosition: Vector({
+      x: 0,
+      y: 0
+    }),
 
     nodes: {
-      A: {type: 'input', name: 'DOM', x: 400, y: 50},
-      B: {type: 'code', text: 'xs.of("hello world")', x: 400, y: 400},
-      C: {type: 'output', name: 'DOM', x: 400, y: 900}
+      A: {type: 'input', name: 'DOM', position: Vector({x: 400, y: 50})},
+      B: {type: 'code', text: 'xs.of("hello world")', position: Vector({x: 400, y: 400})},
+      C: {type: 'output', name: 'DOM', position: Vector({x: 400, y: 900})}
     },
 
     edges: [
@@ -97,16 +99,13 @@ function App (sources) {
     .select('document')
     .events('mousemove')
     .map(mousePositionFromEvent)
-    .startWith({x: 0, y: 0});
+    .startWith(Vector({x: 0, y: 0}));
 
   const mousePositionChange$ = mousePosition$
     .fold(({lastPosition}, position) => ({
       lastPosition: position,
-      delta: {
-        x: position.x - lastPosition.x,
-        y: position.y - lastPosition.y
-      }
-    }), {lastPosition: {x: 0, y: 0}})
+      delta: position.minus(lastPosition)
+    }), {lastPosition: Vector({x: 0, y: 0})})
     .drop(1)
     .map(({delta}) => delta);
 
@@ -141,34 +140,6 @@ function translateZoom (zoom, pan, width, height) {
     y: -(zoom - 1) * height / 2 + pan.y,
     width: width * zoom,
     height: height * zoom
-  };
-}
-
-function add (a, b) {
-  return {
-    x: a.x + b.x,
-    y: a.y + b.y
-  };
-}
-
-function subtract (a, b) {
-  return {
-    x: a.x - b.x,
-    y: a.y - b.y
-  };
-}
-
-function multiply (a, n) {
-  if (typeof n === 'object') {
-    return {
-      x: a.x * n.x,
-      y: a.y * n.y
-    };
-  }
-
-  return {
-    x: a.x * n,
-    y: a.y * n
   };
 }
 
@@ -216,31 +187,31 @@ function renderBlock (state, {x, y, width, height}) {
 
 function renderNode (node) {
   if (node.type === 'input') {
-    return renderCodeBlock(node.name, node);
+    return renderCodeBlock(node.name, node.position);
   }
 
   if (node.type === 'output') {
-    return renderCodeBlock(node.name, node);
+    return renderCodeBlock(node.name, node.position);
   }
 
   if (node.type === 'code') {
-    return renderCodeBlock(node.text, node);
+    return renderCodeBlock(node.text, node.position);
   }
 }
 
 function renderEdge (edge, state) {
-  const fromNode = state.nodes[edge.from];
-  const toNode = state.nodes[edge.to];
+  const from = state.nodes[edge.from].position;
+  const to = state.nodes[edge.to].position;
 
   return (
     h(
       'line',
       {
         attrs: {
-          x1: fromNode.x,
-          y1: fromNode.y,
-          x2: toNode.x,
-          y2: toNode.y,
+          x1: from.x,
+          y1: from.y,
+          x2: to.x,
+          y2: to.y,
           stroke: 'lightgreen',
           strokeWidth: 2
         }
