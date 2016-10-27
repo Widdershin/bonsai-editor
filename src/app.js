@@ -1,11 +1,30 @@
 import {div, pre, svg, h, button, body} from '@cycle/dom';
 import xs from 'xstream';
+import _ from 'lodash';
 
 function mousePositionFromEvent (event) {
   return {
     x: event.clientX,
     y: event.clientY
-  }
+  };
+}
+
+function panReducer (pan) {
+  return function _panReducer (state) {
+    if (state.selectedCodeBlock) {
+      return {
+        ...state,
+
+        codeBlockPosition: add(pan, state.codeBlockPosition)
+      };
+    }
+
+    return {
+      ...state,
+
+      pan: subtract(state.pan, multiply(pan, state.zoom))
+    };
+  };
 }
 
 function App (sources) {
@@ -16,7 +35,25 @@ function App (sources) {
     pan: {
       x: 0,
       y: 0
-    }
+    },
+
+    codeBlockPosition: {
+      x: 0,
+      y: 0
+    },
+
+    nodes: {
+      A: {type: 'input', name: 'DOM', x: 400, y: 50},
+      B: {type: 'code', text: 'xs.of("hello world")', x: 400, y: 400},
+      C: {type: 'output', name: 'DOM', x: 400, y: 900}
+    },
+
+    edges: [
+      {from: 'A', to: 'B'},
+      {from: 'B', to: 'C'}
+    ],
+
+    selectedCodeBlock: false
   };
 
   const mouseWheel$ = DOM
@@ -37,12 +74,23 @@ function App (sources) {
       zoom: state.zoom - 0.03
     }));
 
+  const codeBlockMousedown$ = DOM
+    .select('.code-wrapper')
+    .events('mousedown');
+
+  const selectCodeBlock$ = codeBlockMousedown$
+    .map(ev => (state) => ({...state, selectedCodeBlock: true}));
+
   const svgMousedown$ = DOM
     .select('svg')
     .events('mousedown');
 
   const svgMouseup$ = DOM
     .select('svg')
+    .events('mouseup');
+
+  const mouseup$ = DOM
+    .select('document')
     .events('mouseup');
 
   const mousePosition$ = DOM
@@ -74,7 +122,10 @@ function App (sources) {
   const reducer$ = xs.merge(
     zoomOut$,
     zoomIn$,
-    pan$.map(pan => state => ({...state, pan: subtract(state.pan, multiply(pan, state.zoom))}))
+    pan$.map(panReducer),
+
+    selectCodeBlock$,
+    mouseup$.mapTo(state => ({...state, selectedCodeBlock: false}))
   );
 
   const state$ = reducer$.fold((state, reducer) => reducer(state), initialState);
@@ -90,21 +141,21 @@ function translateZoom (zoom, pan, width, height) {
     y: -(zoom - 1) * height / 2 + pan.y,
     width: width * zoom,
     height: height * zoom
-  }
+  };
 }
 
 function add (a, b) {
   return {
     x: a.x + b.x,
     y: a.y + b.y
-  }
+  };
 }
 
 function subtract (a, b) {
   return {
     x: a.x - b.x,
     y: a.y - b.y
-  }
+  };
 }
 
 function multiply (a, n) {
@@ -147,20 +198,54 @@ function view (state) {
         renderBlock(state, {x: 0, y: 0, width: blockWidth, height: blockWidth})
       ])
     ])
-  )
+  );
 }
 
 function renderBlock (state, {x, y, width, height}) {
   return (
-    h('g', [
+    h('g', {class: 'code-block'}, [
       h('rect', {attrs: {x: 20, y: 20, width: width - 40, height: height - 40, stroke: 'skyblue', fill: '#222322'}}),
       h('text', {attrs: {x: 40, y: 55, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
-      h('line', {attrs: {x1: width / 2 - 70, y1: 40, x2: 400, y2: height - 50, stroke: 'lightgreen', strokeWidth: 2}}),
-      renderCodeBlock('DOM', {x: width / 2 - 70, y: 50}),
-      renderCodeBlock(JSON.stringify(state, null, 2), {x: 150, y: 200}),
-      renderCodeBlock('xs.of(div("hello world"))', {x: 400, y: 400}),
-      renderCodeBlock('DOM', {x: width / 2 - 70, y: height - 60})
+      renderCodeBlock(JSON.stringify(state, null, 2), {x: -300, y: 500}),
+
+      ...state.edges.map(edge => renderEdge(edge, state)),
+      ..._.values(state.nodes).map(renderNode)
     ])
+  );
+}
+
+function renderNode (node) {
+  if (node.type === 'input') {
+    return renderCodeBlock(node.name, node);
+  }
+
+  if (node.type === 'output') {
+    return renderCodeBlock(node.name, node);
+  }
+
+  if (node.type === 'code') {
+    return renderCodeBlock(node.text, node);
+  }
+}
+
+function renderEdge (edge, state) {
+  const fromNode = state.nodes[edge.from];
+  const toNode = state.nodes[edge.to];
+
+  return (
+    h(
+      'line',
+      {
+        attrs: {
+          x1: fromNode.x,
+          y1: fromNode.y,
+          x2: toNode.x,
+          y2: toNode.y,
+          stroke: 'lightgreen',
+          strokeWidth: 2
+        }
+      }
+    )
   );
 }
 

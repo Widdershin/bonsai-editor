@@ -3,6 +3,7 @@ html, body {
   color: #EFE;
   margin: 0;
   font-size: 19px;
+  -webkit-user-select: none;
 }
 
 pre {

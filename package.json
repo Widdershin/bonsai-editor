@@ -8,6 +8,7 @@
   "dependencies": {
     "@cycle/dom": "^13.0.0",
     "@cycle/xstream-run": "^3.1.0",
+    "lodash": "^4.16.4",
     "xstream": "^6.5.0"
   },
   "scripts": {
