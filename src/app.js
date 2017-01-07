@@ -2,6 +2,62 @@ import {div, pre, svg, h, button, body} from '@cycle/dom';
 import xs from 'xstream';
 import _ from 'lodash';
 import Vector from './vector';
+import vm from 'vm';
+
+function findInputNodes (state) {
+  const nodes = Object.values(state.nodes);
+
+  return nodes.filter(node => node.type === 'input');
+}
+
+function findConnectedNodes (state, node) {
+  const id = node.id;
+
+  const edgesTo = state.edges
+    .filter(edge => edge.from === id)
+    .map(edge => edge.to);
+
+  return edgesTo.map(nodeId => state.nodes[nodeId]);
+}
+
+function graphToInnerAppMain (state) {
+  return function innerAppMain (sources) {
+    const inputNodes = findInputNodes(state);
+    let output = {};
+
+    function doNodeThing (node, sourceValue) {
+      if (node.type === 'output') {
+        output[node.name] = sourceValue;
+
+        return;
+      }
+
+      const connectedNodes = findConnectedNodes(state, node);
+      let result;
+
+      if (node.type === 'input') {
+        result = sources[node.name];
+      }
+
+      if (node.type === 'code') {
+        const context = {
+          xs,
+          div
+        };
+
+        result = vm.runInNewContext(node.text, context);
+      }
+
+      connectedNodes.forEach(connectedNode =>
+        doNodeThing(connectedNode, result)
+      );
+    }
+
+    inputNodes.forEach(doNodeThing);
+
+    return output;
+  }
+}
 
 function mousePositionFromEvent (event) {
   return Vector({
@@ -150,8 +206,12 @@ function App (sources) {
 
   const state$ = reducer$.fold((state, reducer) => reducer(state), initialState);
 
+  const innerAppMain$ = state$.map(graphToInnerAppMain);
+
   return {
-    DOM: state$.map(view)
+    DOM: state$.map(view),
+
+    InnerApp: innerAppMain$
   };
 }
 
@@ -180,7 +240,7 @@ function view (state) {
       }, [
         h('g', [
           h('foreignObject', {class: 'preview', attrs: {x: blockWidth + 30, y: 20, width: blockWidth, height: blockWidth - 50}}, [
-            body('.preview', [
+            body('#inner-app.preview', [
               div('hello world')
             ])
           ])
@@ -196,8 +256,10 @@ function renderBlock (state, {x, y, width, height}) {
   return (
     h('g', {class: 'code-block'}, [
       h('rect', {attrs: {x: 20, y: 20, width: width - 40, height: height - 40, stroke: 'skyblue', fill: '#222322'}}),
+      h('rect', {attrs: {x: width - 100, y: 40, width: 60, height: 30, fill: 'palegreen', stroke: '#DDD'}}),
+      h('text', {attrs: {x: width - 90, y: 60, 'font-family': 'monospace', 'font-size': 20, stroke: 'black', fill: 'black'}}, 'Run'),
       h('text', {attrs: {x: 40, y: 55, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
-      renderCodeBlock(JSON.stringify(state, null, 2), {x: -300, y: 500}),
+      //renderCodeBlock(JSON.stringify(state, null, 2), {x: -300, y: 500}),
 
       ...state.edges.map(edge => renderEdge(edge, state)),
       ..._.values(state.nodes).map(renderNode)
