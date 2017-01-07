@@ -10,6 +10,9 @@ function mousePositionFromEvent (event) {
   });
 }
 
+  const width = document.documentElement.clientWidth - 20;
+  const height = document.documentElement.clientHeight - 30;
+
 function panReducer (pan) {
   return function _panReducer (state) {
     const scaledPan = pan.times(state.zoom);
@@ -51,8 +54,8 @@ function App (sources) {
 
     nodes: {
       A: {id: 'A', type: 'input', name: 'DOM', position: Vector({x: 400, y: 50})},
-      B: {id: 'B', type: 'code', text: 'xs.of("nello world")', position: Vector({x: 400, y: 400})},
-      C: {id: 'C', type: 'output', name: 'DOM', position: Vector({x: 400, y: 900})}
+      B: {id: 'B', type: 'code', text: 'xs.of("nello world")', position: Vector({x: 400, y: 200})},
+      C: {id: 'C', type: 'output', name: 'DOM', position: Vector({x: 400, y: 500})}
     },
 
     edges: [
@@ -60,26 +63,42 @@ function App (sources) {
       {from: 'B', to: 'C'}
     ],
 
-    selectedCodeBlock: null
+    selectedCodeBlock: null,
+
+    // TODO - driverize
+    width: document.documentElement.clientWidth - 20,
+    height: document.documentElement.clientHeight - 30
   };
 
   const mouseWheel$ = DOM
     .select('document')
     .events('mousewheel');
 
-  const zoomOut$ = mouseWheel$
-    .filter(ev => ev.wheelDelta < 0)
-    .map(ev => (state) => ({
-      ...state,
-      zoom: state.zoom + 0.03
-    }));
+  const zoom$ = mouseWheel$.map(event => state => {
+    const zoom = event.wheelDelta < 0 ? 0.05 : -0.05;
 
-  const zoomIn$ = mouseWheel$
-    .filter(ev => ev.wheelDelta > 0)
-    .map(ev => (state) => ({
+    const center = Vector({
+      x: state.width / 2,
+      y: state.height / 2
+    });
+
+    const mousePosition = Vector({
+      x: event.clientX,
+      y: event.clientY
+    });
+
+    const distance = mousePosition.minus(center);
+
+    console.log(distance);
+
+    return {
       ...state,
-      zoom: state.zoom - 0.03
-    }));
+
+      pan: state.pan.plus(distance.times(state.zoom).times(-zoom)),
+
+      zoom: state.zoom * (1 + zoom)
+    }
+  });
 
   const codeBlockMousedown$ = DOM
     .select('.code-wrapper')
@@ -124,8 +143,7 @@ function App (sources) {
     .flatten();
 
   const reducer$ = xs.merge(
-    zoomOut$,
-    zoomIn$,
+    zoom$,
     pan$.map(panReducer),
 
     selectCodeBlock$,
@@ -149,8 +167,7 @@ function translateZoom (zoom, pan, width, height) {
 }
 
 function view (state) {
-  const width = document.documentElement.clientWidth - 20;
-  const height = document.documentElement.clientHeight - 30;
+  const {width, height} = state;
   const zoomedDimensions = translateZoom(state.zoom, state.pan, width, height);
   const blockWidth = width / 2;
 
