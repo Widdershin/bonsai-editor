@@ -89,8 +89,6 @@ function App (sources) {
 
     const distance = mousePosition.minus(center);
 
-    console.log(distance);
-
     return {
       ...state,
 
