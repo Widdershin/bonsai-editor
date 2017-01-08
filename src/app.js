@@ -5,7 +5,7 @@ import Vector from './vector';
 import vm from 'vm';
 
 function findInputNodes (state) {
-  const nodes = Object.values(state.nodes);
+  const nodes = Object.values(state.graph.nodes);
 
   return nodes.filter(node => node.type === 'input');
 }
@@ -13,11 +13,11 @@ function findInputNodes (state) {
 function findConnectedNodes (state, node) {
   const id = node.id;
 
-  const edgesTo = state.edges
+  const edgesTo = state.graph.edges
     .filter(edge => edge.from === id)
     .map(edge => edge.to);
 
-  return edgesTo.map(nodeId => state.nodes[nodeId]);
+  return edgesTo.map(nodeId => state.graph.nodes[nodeId]);
 }
 
 function graphToInnerAppMain (state) {
@@ -74,18 +74,22 @@ function panReducer (pan) {
     const scaledPan = pan.times(state.zoom);
 
     if (state.selectedCodeBlock) {
-      const selectedNode = state.nodes[state.selectedCodeBlock];
+      const selectedNode = state.graph.nodes[state.selectedCodeBlock];
 
       return {
         ...state,
 
-        nodes: {
-          ...state.nodes,
+        graph: {
+          ...state.graph,
 
-          [state.selectedCodeBlock]: {
-            ...selectedNode,
+          nodes: {
+            ...state.graph.nodes,
 
-            position: selectedNode.position.plus(scaledPan)
+            [state.selectedCodeBlock]: {
+              ...selectedNode,
+
+              position: selectedNode.position.plus(scaledPan)
+            }
           }
         }
       };
@@ -110,16 +114,35 @@ function App (sources) {
 
     editing: null,
 
-    nodes: {
-      A: {id: 'A', type: 'input', name: 'DOM', position: Vector({x: 400, y: 50})},
-      B: {id: 'B', type: 'code', text: 'xs.of("nello world")', position: Vector({x: 400, y: 200})},
-      C: {id: 'C', type: 'output', name: 'DOM', position: Vector({x: 400, y: 500})}
-    },
+    graph: {
+      nodes: {
+        A: {
+          id: 'A',
+          type: 'input',
+          name: 'DOM',
+          position: Vector({x: 400, y: 50})
+        },
 
-    edges: [
-      {from: 'A', to: 'B'},
-      {from: 'B', to: 'C'}
-    ],
+        B: {
+          id: 'B',
+          type: 'code',
+          text: 'xs.of("nello world")',
+          position: Vector({x: 400, y: 200})
+        },
+
+        C: {
+          id: 'C',
+          type: 'output',
+          name: 'DOM',
+          position: Vector({x: 400, y: 500})
+        }
+      },
+
+      edges: [
+        {from: 'A', to: 'B'},
+        {from: 'B', to: 'C'}
+      ]
+    },
 
     selectedCodeBlock: null,
 
@@ -196,20 +219,24 @@ function App (sources) {
     .select('.code-wrapper textarea')
     .events('change')
     .map(ev => (state) => {
-      const editingNode = state.nodes[state.editing];
+      const editingNode = state.graph.nodes[state.editing];
 
       return {
         ...state,
 
         editing: null,
 
-        nodes: {
-          ...state.nodes,
+        graph: {
+          ...state.graph,
 
-          [editingNode.id]: {
-            ...editingNode,
+          nodes: {
+            ...state.graph.nodes,
 
-            text: ev.target.value
+            [editingNode.id]: {
+              ...editingNode,
+
+              text: ev.target.value
+            }
           }
         }
       }
@@ -294,13 +321,11 @@ function renderBlock (state, {x, y, width, height}) {
   return (
     h('g', {class: 'code-block'}, [
       h('rect', {attrs: {x: 20, y: 20, width: width - 40, height: height - 40, stroke: 'skyblue', fill: '#222322'}}),
-      h('rect', {attrs: {x: width - 100, y: 40, width: 60, height: 30, fill: 'palegreen', stroke: '#DDD'}}),
-      h('text', {attrs: {x: width - 90, y: 60, 'font-family': 'monospace', 'font-size': 20, stroke: 'black', fill: 'black'}}, 'Run'),
       h('text', {attrs: {x: 40, y: 55, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
       //renderCodeBlock(JSON.stringify(state, null, 2), {x: -300, y: 500}),
 
-      ...state.edges.map(edge => renderEdge(edge, state)),
-      ..._.values(state.nodes).map(node => renderNode(node, state))
+      ...state.graph.edges.map(edge => renderEdge(edge, state)),
+      ..._.values(state.graph.nodes).map(node => renderNode(node, state))
     ])
   );
 }
@@ -320,8 +345,8 @@ function renderNode (node, state) {
 }
 
 function renderEdge (edge, state) {
-  const from = state.nodes[edge.from].position;
-  const to = state.nodes[edge.to].position;
+  const from = state.graph.nodes[edge.from].position;
+  const to = state.graph.nodes[edge.to].position;
 
   return (
     h(
