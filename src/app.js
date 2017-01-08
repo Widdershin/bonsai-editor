@@ -3,6 +3,8 @@ import xs from 'xstream';
 import _ from 'lodash';
 import Vector from './vector';
 import vm from 'vm';
+import uuid from 'node-uuid';
+import debounce from 'xstream/extra/debounce';
 
 function findInputNodes (state) {
   const nodes = Object.values(state.graph.nodes);
@@ -42,10 +44,17 @@ function graphToInnerAppMain (state) {
       if (node.type === 'code') {
         const context = {
           xs,
-          div
+          div,
+          __previous: sourceValue
         };
 
-        result = vm.runInNewContext(node.text, context);
+        let codeToRun = node.text;
+
+        if (node.text.startsWith('.')) {
+          codeToRun = `__previous${node.text}`;
+        }
+
+        result = vm.runInNewContext(codeToRun, context);
       }
 
       connectedNodes.forEach(connectedNode =>
@@ -263,6 +272,46 @@ function App (sources) {
       }
     });
 
+  const addNode$ = DOM
+    .select('.add-node')
+    .events('click')
+    .map(ev => (state) => {
+      const fromId = ev.ownerTarget.attributes.from.value;
+      const toId = ev.ownerTarget.attributes.to.value;
+
+      const from = state.graph.nodes[fromId];
+      const to = state.graph.nodes[toId];
+
+      const midPoint = midway(from.position, to.position);
+
+      const newNode = {
+        id: uuid.v4(),
+        type: 'code',
+        text: 'xs.of("nello world")',
+        position: midPoint
+      };
+
+      const newEdges = state.graph.edges
+        .filter(edge => !(edge.from === fromId && edge.to === toId))
+        .concat([{from: fromId, to: newNode.id}, {from: newNode.id, to: toId}]);
+
+      return {
+        ...state,
+
+        graph: {
+          ...state.graph,
+
+          nodes: {
+            ...state.graph.nodes,
+
+            [newNode.id]: newNode
+          },
+
+          edges: newEdges
+        }
+      }
+    });
+
   const mousePositionChange$ = mousePosition$
     .fold(({lastPosition}, position) => ({
       lastPosition: position,
@@ -285,6 +334,7 @@ function App (sources) {
     pan$.map(panReducer),
     editing$,
     finishEditing$,
+    addNode$,
 
     selectCodeBlock$,
     mouseup$.mapTo(state => ({...state, selectedCodeBlock: null}))
@@ -292,7 +342,7 @@ function App (sources) {
 
   const state$ = reducer$.fold((state, reducer) => reducer(state), initialState);
 
-  const innerAppMain$ = state$.map(graphToInnerAppMain);
+  const innerAppMain$ = state$.compose(debounce(300)).map(graphToInnerAppMain);
 
   return {
     DOM: state$.map(view),
@@ -368,14 +418,20 @@ function renderNode (node, state) {
   }
 }
 
+function midway (a, b) {
+  const difference = b.minus(a);
+
+  return a.plus(difference.times(0.5));
+}
+
 function renderEdge (edge, state) {
   const from = state.graph.nodes[edge.from];
   const to = state.graph.nodes[edge.to];
 
-  const midpoint = from.position.plus(to.position.minus(from.position).times(0.5));
+  const midpoint = midway(from.position, to.position);
 
   return (
-    h('g', {class: {'add-node': true}}, [
+    h('g', {class: {'add-node': true}, attrs: {from: from.id, to: to.id}}, [
       h(
         'line',
         {
@@ -443,7 +499,7 @@ function renderCodeBlock (code, {x, y}, id, editing) {
 
       h('foreignObject', {attrs: {x: x + 5, y: y + 6}}, [
         div('.code-wrapper', {attrs: {'data-id': id}}, [
-          editing ? textarea(code) : pre(code)
+          editing ? textarea('.code-editor', code) : pre('.code-inner', code)
         ])
       ])
     ])
