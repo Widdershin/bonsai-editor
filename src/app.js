@@ -369,23 +369,48 @@ function renderNode (node, state) {
 }
 
 function renderEdge (edge, state) {
-  const from = state.graph.nodes[edge.from].position;
-  const to = state.graph.nodes[edge.to].position;
+  const from = state.graph.nodes[edge.from];
+  const to = state.graph.nodes[edge.to];
+
+  const midpoint = from.position.plus(to.position.minus(from.position).times(0.5));
 
   return (
-    h(
-      'line',
-      {
-        attrs: {
-          x1: from.x,
-          y1: from.y,
-          x2: to.x,
-          y2: to.y,
-          stroke: 'lightgreen',
-          strokeWidth: 2
+    h('g', {class: {'add-node': true}}, [
+      h(
+        'line',
+        {
+          attrs: {
+            x1: from.position.x,
+            y1: from.position.y,
+            x2: to.position.x,
+            y2: to.position.y,
+            stroke: 'lightgreen',
+            strokeWidth: 2
+          }
         }
-      }
-    )
+      ),
+
+      h('circle', {
+        attrs: {
+          r: 8,
+          cx: midpoint.x,
+          cy: midpoint.y,
+        }
+      }),
+
+      h('text', {
+        class: {
+          'add-node-plus': true
+        },
+
+        attrs: {
+          x: midpoint.x,
+          y: midpoint.y,
+          'text-anchor': 'middle',
+          'dominant-baseline': 'middle'
+        }
+      }, '+')
+    ])
   );
 }
 

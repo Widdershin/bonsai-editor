@@ -24,3 +24,30 @@ pre {
 
   font-size: 0.8em;
 }
+
+.add-node circle {
+  transition-property: fill, stroke;
+  transition-duration: 0.5s;
+  transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+
+  fill: lightgreen;
+}
+
+.add-node text {
+  transition-property: fill, stroke;
+  transition-duration: 0.5s;
+  transition-timing-function: cubic-bezier(0.19, 1, 0.22, 1);
+
+  fill: #222322;
+  stroke: #222322;
+}
+
+.add-node:hover circle {
+  fill: #222322;
+  stroke: lightgreen;
+}
+
+.add-node:hover text {
+  fill: lightgreen;
+  stroke: lightgreen;
+}
