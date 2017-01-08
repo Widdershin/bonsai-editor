@@ -18,3 +18,9 @@ pre {
   color: black;
   padding: 5px;
 }
+
+.code-wrapper textarea {
+  font-family: monospace;
+
+  font-size: 0.8em;
+}

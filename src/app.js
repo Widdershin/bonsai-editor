@@ -1,4 +1,4 @@
-import {div, pre, svg, h, button, body} from '@cycle/dom';
+import {div, pre, svg, h, button, body, textarea} from '@cycle/dom';
 import xs from 'xstream';
 import _ from 'lodash';
 import Vector from './vector';
@@ -108,6 +108,8 @@ function App (sources) {
     pan: Vector.zero,
     codeBlockPosition: Vector.zero,
 
+    editing: null,
+
     nodes: {
       A: {id: 'A', type: 'input', name: 'DOM', position: Vector({x: 400, y: 50})},
       B: {id: 'B', type: 'code', text: 'xs.of("nello world")', position: Vector({x: 400, y: 200})},
@@ -179,6 +181,40 @@ function App (sources) {
     .map(mousePositionFromEvent)
     .startWith(Vector.zero);
 
+  const editing$ = DOM
+    .select('.code-wrapper')
+    .events('dblclick')
+    .map(ev => (state) => {
+      return {
+        ...state,
+
+        editing: ev.ownerTarget.dataset.id
+      }
+    });
+
+  const finishEditing$ = DOM
+    .select('.code-wrapper textarea')
+    .events('change')
+    .map(ev => (state) => {
+      const editingNode = state.nodes[state.editing];
+
+      return {
+        ...state,
+
+        editing: null,
+
+        nodes: {
+          ...state.nodes,
+
+          [editingNode.id]: {
+            ...editingNode,
+
+            text: ev.target.value
+          }
+        }
+      }
+    });
+
   const mousePositionChange$ = mousePosition$
     .fold(({lastPosition}, position) => ({
       lastPosition: position,
@@ -199,6 +235,8 @@ function App (sources) {
   const reducer$ = xs.merge(
     zoom$,
     pan$.map(panReducer),
+    editing$,
+    finishEditing$,
 
     selectCodeBlock$,
     mouseup$.mapTo(state => ({...state, selectedCodeBlock: null}))
@@ -262,12 +300,12 @@ function renderBlock (state, {x, y, width, height}) {
       //renderCodeBlock(JSON.stringify(state, null, 2), {x: -300, y: 500}),
 
       ...state.edges.map(edge => renderEdge(edge, state)),
-      ..._.values(state.nodes).map(renderNode)
+      ..._.values(state.nodes).map(node => renderNode(node, state))
     ])
   );
 }
 
-function renderNode (node) {
+function renderNode (node, state) {
   if (node.type === 'input') {
     return renderCodeBlock(node.name, node.position);
   }
@@ -277,7 +315,7 @@ function renderNode (node) {
   }
 
   if (node.type === 'code') {
-    return renderCodeBlock(node.text, node.position, node.id);
+    return renderCodeBlock(node.text, node.position, node.id, state.editing === node.id);
   }
 }
 
@@ -302,7 +340,7 @@ function renderEdge (edge, state) {
   );
 }
 
-function renderCodeBlock (code, {x, y}, id) {
+function renderCodeBlock (code, {x, y}, id, editing) {
   const lines = code.split('\n');
   const LINE_HEIGHT = 23;
   const CHARACTER_WIDTH = 11.6;
@@ -331,7 +369,7 @@ function renderCodeBlock (code, {x, y}, id) {
 
       h('foreignObject', {attrs: {x: x + 5, y: y + 6}}, [
         div('.code-wrapper', {attrs: {'data-id': id}}, [
-          pre(code)
+          editing ? textarea(code) : pre(code)
         ])
       ])
     ])
