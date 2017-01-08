@@ -106,6 +106,15 @@ function panReducer (pan) {
 function App (sources) {
   const {DOM} = sources;
 
+  const graphPosition = Vector({x: 20, y: 20})
+
+  const graphSize = Vector({
+    x: (document.documentElement.clientWidth - 100) / 2,
+    y: (document.documentElement.clientWidth - 100) / 2
+  });
+
+  const graphCenter = graphPosition.plus(graphSize.times(0.5));
+
   const initialState = {
     zoom: 1,
 
@@ -115,26 +124,38 @@ function App (sources) {
     editing: null,
 
     graph: {
+      position: graphPosition,
+      size: graphSize,
+
       nodes: {
         A: {
           id: 'A',
           type: 'input',
           name: 'DOM',
-          position: Vector({x: 400, y: 50})
+          position: Vector({
+            x: graphCenter.x,
+            y: graphPosition.y + graphSize.y / 10
+          })
         },
 
         B: {
           id: 'B',
           type: 'code',
           text: 'xs.of("nello world")',
-          position: Vector({x: 400, y: 200})
+          position: Vector({
+            x: graphCenter.x,
+            y: graphCenter.y
+          })
         },
 
         C: {
           id: 'C',
           type: 'output',
           name: 'DOM',
-          position: Vector({x: 400, y: 500})
+          position: Vector({
+            x: graphCenter.x,
+            y: (graphPosition.y + graphSize.y) - graphSize.y / 10
+          })
         }
       },
 
@@ -311,18 +332,21 @@ function view (state) {
           ])
         ]),
 
-        renderBlock(state, {x: 0, y: 0, width: blockWidth, height: blockWidth})
+        renderGraph(state, state.graph)
       ])
     ])
   );
 }
 
-function renderBlock (state, {x, y, width, height}) {
+function renderGraph (state, graph) {
+  const {x, y} = graph.position;
+  const width = graph.size.x;
+  const height = graph.size.y;
+
   return (
     h('g', {class: 'code-block'}, [
-      h('rect', {attrs: {x: 20, y: 20, width: width - 40, height: height - 40, stroke: 'skyblue', fill: '#222322'}}),
-      h('text', {attrs: {x: 40, y: 55, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
-      //renderCodeBlock(JSON.stringify(state, null, 2), {x: -300, y: 500}),
+      h('rect', {attrs: {x, y, width, height, stroke: 'skyblue', fill: '#222322'}}),
+      h('text', {attrs: {x: x + 20, y: y + 30, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
 
       ...state.graph.edges.map(edge => renderEdge(edge, state)),
       ..._.values(state.graph.nodes).map(node => renderNode(node, state))
