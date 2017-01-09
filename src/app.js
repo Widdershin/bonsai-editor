@@ -22,10 +22,35 @@ function findConnectedNodes (state, node) {
   return edgesTo.map(nodeId => state.graph.nodes[nodeId]);
 }
 
+function findOrphanNodes (graph) {
+  const connectedIds = _.uniq(_.flatten(graph.edges.map(edge => [edge.from, edge.to])));
+
+  return Object.values(graph.nodes)
+    .filter(node => node.type === "code" && !connectedIds.includes(node.id));
+}
+
 function graphToInnerAppMain (state) {
   return function innerAppMain (sources) {
     const inputNodes = findInputNodes(state);
+    const orphanNodes = findOrphanNodes(state.graph);
     let output = {};
+
+    const contexts = orphanNodes.map(node => {
+      try {
+        let context = {};
+        const result = vm.runInNewContext(
+          node.text,
+          context
+        );
+
+        return context;
+      } catch (e) {
+        console.error(e);
+        return {};
+      }
+    });
+
+    const commonContext = Object.assign({}, ...contexts);
 
     function doNodeThing (node, sourceValue) {
       if (node.type === 'output') {
@@ -45,6 +70,8 @@ function graphToInnerAppMain (state) {
         const context = {
           xs,
           div,
+
+          ...commonContext,
           __previous: sourceValue
         };
 
@@ -109,6 +136,16 @@ function panReducer (pan) {
 
       pan: state.pan.minus(scaledPan)
     };
+  };
+}
+
+
+function makeCodeNode (text, position) {
+  return {
+    id: uuid.v4(),
+    type: 'code',
+    text,
+    position
   };
 }
 
@@ -214,7 +251,31 @@ function App (sources) {
     .events('mousedown');
 
   const selectCodeBlock$ = codeBlockMousedown$
-    .map(ev => (state) => ({...state, selectedCodeBlock: ev.ownerTarget.dataset.id}));
+    .map(ev => (state) => ({
+      ...state,
+      selectedCodeBlock: ev.ownerTarget.dataset.id
+    }));
+
+  const addFloatingNode$ = DOM
+    .select('.graph-background')
+    .events('dblclick')
+    .map(ev => (state) => {
+      const newNode = makeCodeNode('', Vector({x: ev.clientX, y: ev.clientY}));
+
+      return {
+        ...state,
+
+        graph: {
+          ...state.graph,
+
+          nodes: {
+            ...state.graph.nodes,
+
+            [newNode.id]: newNode
+          }
+        }
+      }
+    });
 
   const svgMousedown$ = DOM
     .select('svg')
@@ -284,12 +345,7 @@ function App (sources) {
 
       const midPoint = midway(from.position, to.position);
 
-      const newNode = {
-        id: uuid.v4(),
-        type: 'code',
-        text: 'xs.of("nello world")',
-        position: midPoint
-      };
+      const newNode = makeCodeNode('xs.of("nello world")', midPoint)
 
       const newEdges = state.graph.edges
         .filter(edge => !(edge.from === fromId && edge.to === toId))
@@ -335,6 +391,7 @@ function App (sources) {
     editing$,
     finishEditing$,
     addNode$,
+    addFloatingNode$,
 
     selectCodeBlock$,
     mouseup$.mapTo(state => ({...state, selectedCodeBlock: null}))
@@ -394,8 +451,8 @@ function renderGraph (state, graph) {
   const height = graph.size.y;
 
   return (
-    h('g', {class: 'code-block'}, [
-      h('rect', {attrs: {x, y, width, height, stroke: 'skyblue', fill: '#222322'}}),
+    h('g', {class: {'graph': true}}, [
+      h('rect', {class: {'graph-background': true}, attrs: {x, y, width, height, stroke: 'skyblue', fill: '#222322'}}),
       h('text', {attrs: {x: x + 20, y: y + 30, 'font-family': 'monospace', 'font-size': 30, stroke: '#DDD', fill: '#DDD'}}, 'main'),
 
       ...state.graph.edges.map(edge => renderEdge(edge, state)),
@@ -479,14 +536,19 @@ function renderCodeBlock (code, {x, y}, id, editing) {
   const longestLine = Math.max(...lines.map(line => line.length));
 
   const height = lines.length * LINE_HEIGHT + PADDING;
-  const width = longestLine * CHARACTER_WIDTH + PADDING;
+  const width = Math.max(40, longestLine * CHARACTER_WIDTH + PADDING);
+
+  const rows = lines.length;
+  const cols = longestLine;
 
   x -= width / 2;
   y -= height / 2;
 
   return (
-    h('g', [
+    h('g', {class: {'code-block': true}}, [
       h('rect', {
+        class: {'code-block-background': true},
+
         attrs: {
           x,
           y,
@@ -498,8 +560,8 @@ function renderCodeBlock (code, {x, y}, id, editing) {
       }),
 
       h('foreignObject', {attrs: {x: x + 5, y: y + 6}}, [
-        div('.code-wrapper', {attrs: {'data-id': id}}, [
-          editing ? textarea('.code-editor', code) : pre('.code-inner', code)
+        div('.code-wrapper', {style: {width: `${width - 6}px`, height: `${height}px`}, attrs: {'data-id': id}}, [
+          editing ? textarea('.code-editor', {attrs: {rows, cols}}, code) : pre('.code-inner', code)
         ])
       ])
     ])
