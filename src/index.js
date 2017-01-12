@@ -13,7 +13,12 @@ function innerAppDriver (sink$) {
         DOM: makeDOMDriver('#inner-app')
       }
 
-      dispose = run(main, drivers);
+      try {
+        dispose = run(main, drivers);
+      } catch (e) {
+        console.error('Error running inner app', main);
+        console.error(e);
+      }
     }
   });
 }

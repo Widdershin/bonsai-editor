@@ -1,10 +1,12 @@
-import {div, pre, svg, h, button, body, textarea} from '@cycle/dom';
+import * as domStuff from '@cycle/dom';
 import xs from 'xstream';
 import _ from 'lodash';
 import Vector from './vector';
 import vm from 'vm';
 import uuid from 'node-uuid';
 import debounce from 'xstream/extra/debounce';
+
+const {div, pre, svg, h, button, body, textarea} = domStuff;
 
 function findInputNodes (state) {
   const nodes = Object.values(state.graph.nodes);
@@ -37,7 +39,12 @@ function graphToInnerAppMain (state) {
 
     const contexts = orphanNodes.map(node => {
       try {
-        let context = {};
+        let context = {
+          xs,
+
+          ...domStuff
+        };
+
         const result = vm.runInNewContext(
           node.text,
           context
@@ -69,7 +76,8 @@ function graphToInnerAppMain (state) {
       if (node.type === 'code') {
         const context = {
           xs,
-          div,
+
+          ...domStuff,
 
           ...commonContext,
           __previous: sourceValue
@@ -567,5 +575,6 @@ function renderCodeBlock (code, {x, y}, id, editing) {
     ])
   );
 }
+
 
 export default App;
