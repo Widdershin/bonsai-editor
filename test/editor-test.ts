@@ -42,9 +42,19 @@ const stateWithNewNode = {
   }
 }
 
+function findEdgeId (edges) {
+  const currentIds = Object.keys(edges);
+
+  if (currentIds.length === 0) {
+    return 0;
+  }
+
+  return Math.max(...currentIds.map(i => parseInt(i, 10))) + 1;
+}
+
 function addNode (state) {
   const newNodeId = Math.max(...Object.keys(state.nodes).map(i => parseInt(i, 10))) + 1;
-  const newEdgeId = 0;
+  const newEdgeId = findEdgeId(state.edges);
 
   return {
     ...state,
@@ -141,31 +151,29 @@ describe.only('bonsai editor', () => {
 
     const editor = Editor({DOM, Time});
 
-    const actual$ = editor.state$;
-
-    Time.assertEqual(actual$, expected$);
+    Time.assertEqual(editor.state$, expected$);
 
     Time.run(done);
   });
+
+  const stateWithInput = {
+    ...stateWithNewNode,
+
+    nodes: {
+      ...stateWithNewNode.nodes,
+
+      1: {
+        ...stateWithNewNode.nodes[1],
+
+        text: '.select(".add")'
+      }
+    }
+  }
 
   it('updates the node text on input', (done) => {
     const Time = mockTimeSource();
 
     const inputEvent = {target: {value: '.select(".add")'}};
-
-    const stateWithInput = {
-      ...stateWithNewNode,
-
-      nodes: {
-        ...stateWithNewNode.nodes,
-
-        1: {
-          ...stateWithNewNode.nodes[1],
-
-          text: '.select(".add")'
-        }
-      }
-    }
 
     const input$    = Time.diagram('---x---', {x: inputEvent});
     const expected$ = Time.diagram('a--b---', {a: stateWithNewNode, b: stateWithInput});
@@ -181,6 +189,84 @@ describe.only('bonsai editor', () => {
     const actual$ = editor.state$;
 
     Time.assertEqual(actual$, expected$);
+
+    Time.run(done);
+  });
+
+  const stateWithNewNodeAndInput = addNode(stateWithInput);
+  const stateWithAllTheThings = handleInput(stateWithNewNodeAndInput, {payload: '.events("click")'});
+  const stateWithAllTheThingsAndNewNode = addNode(stateWithAllTheThings);
+  const stateWithMapTo = handleInput(stateWithAllTheThingsAndNewNode, {payload: '.mapTo(+1)'})
+
+  it('finishes editing and makes a new node when you press enter', (done) => {
+    const Time = mockTimeSource();
+
+    const enterPress = {key: 'Enter'};
+    const inputEvent = {target: {value: '.events("click")'}};
+    const inputMapTo = {target: {value: '.mapTo(+1)'}};
+
+    const enter$    = Time.diagram('---x-----x', {x: enterPress});
+    const input$    = Time.diagram('------x-----y', {x: inputEvent, y: inputMapTo});
+    const expected$ = Time.diagram('a--b--c--d--e', {
+      a: stateWithInput,
+      b: stateWithNewNodeAndInput,
+      c: stateWithAllTheThings,
+      d: stateWithAllTheThingsAndNewNode,
+      e: stateWithMapTo
+    });
+
+    const DOM = mockDOMSource({
+      'document': {
+        'keydown': enter$
+      },
+
+      '.cursor-code input': {
+        'input': input$
+      }
+    });
+
+    const editor = Editor({DOM, Time, initialState: stateWithInput});
+
+    Time.assertEqual(editor.state$, expected$);
+
+    Time.run(done);
+  });
+
+  const stateWithEmptyFold = addNode(stateWithMapTo);
+  const stateWithFold = handleInput(stateWithEmptyFold, {payload: '.fold((acc, val) => acc + val, 0)'});
+  const stateWithEmptyRenderView = addNode(stateWithFold);
+  const stateWithRenderView = handleInput(stateWithEmptyRenderView, {payload: ".map(renderView)"});
+
+  it('allows you to finish a branch', (done) => {
+    const Time = mockTimeSource();
+
+    const enterPress = {key: 'Enter'};
+    const inputEvent = {target: {value: '.fold((acc, val) => acc + val, 0)'}};
+    const foldEvent = {target: {value: '.map(renderView)'}};
+
+    const enter$    = Time.diagram('---x-----x----', {x: enterPress});
+    const input$    = Time.diagram('------x-----y-', {x: inputEvent, y: foldEvent});
+    const expected$ = Time.diagram('a--b--c--d--e-', {
+      a: stateWithMapTo,
+      b: stateWithEmptyFold,
+      c: stateWithFold,
+      d: stateWithEmptyRenderView,
+      e: stateWithRenderView
+    });
+
+    const DOM = mockDOMSource({
+      'document': {
+        'keydown': enter$
+      },
+
+      '.cursor-code input': {
+        'input': input$
+      }
+    });
+
+    const editor = Editor({DOM, Time, initialState: stateWithMapTo});
+
+    Time.assertEqual(editor.state$, expected$);
 
     Time.run(done);
   });
